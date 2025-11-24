@@ -8,10 +8,11 @@
 
 use esp_hal::clock::CpuClock;
 use esp_hal::delay::Delay;
-use esp_hal::gpio;
 use esp_hal::i2c::master::I2c;
 use esp_hal::main;
+use esp_hal::spi::master::Spi;
 use esp_hal::time::Rate;
+use esp_hal::{gpio, spi};
 use log::info;
 
 #[panic_handler]
@@ -54,6 +55,27 @@ fn main() -> ! {
     touch_driver
         .init(&mut delay)
         .expect("failed to initialize the touch driver");
+
+    // Configure SPI
+    let spi = Spi::new(
+        peripherals.SPI2,
+        spi::master::Config::default()
+            .with_frequency(Rate::from_mhz(80))
+            .with_mode(spi::Mode::_0),
+    )
+    .expect("could not create SPI instance")
+    .with_sck(peripherals.GPIO1)
+    .with_mosi(peripherals.GPIO2);
+    let spi = embedded_hal_bus::spi::ExclusiveDevice::new(
+        spi,
+        gpio::Output::new(
+            peripherals.GPIO14,
+            gpio::Level::High,
+            gpio::OutputConfig::default(),
+        ),
+        delay.clone(),
+    )
+    .expect("could not create SPI bus device");
 
     loop {}
 }
