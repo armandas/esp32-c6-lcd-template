@@ -14,6 +14,10 @@ use esp_hal::spi::master::Spi;
 use esp_hal::time::Rate;
 use esp_hal::{gpio, spi};
 use log::info;
+use mipidsi::interface::SpiInterface;
+use mipidsi::models::ST7789;
+use mipidsi::options::{ColorInversion, Orientation, Rotation};
+use static_cell::StaticCell;
 
 #[panic_handler]
 fn panic(_: &core::panic::PanicInfo) -> ! {
@@ -23,6 +27,13 @@ fn panic(_: &core::panic::PanicInfo) -> ! {
 // This creates a default app-descriptor required by the esp-idf bootloader.
 // For more information see: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/app_image_format.html#application-description>
 esp_bootloader_esp_idf::esp_app_desc!();
+
+const DISPLAY_OFFSET_X: u16 = 34;
+const DISPLAY_OFFSET_Y: u16 = 0;
+const DISPLAY_SIZE_X: u16 = 172;
+const DISPLAY_SIZE_Y: u16 = 320;
+
+static SPI_BUFFER: StaticCell<[u8; 4096]> = StaticCell::new();
 
 #[main]
 fn main() -> ! {
@@ -48,8 +59,8 @@ fn main() -> ! {
     let mut touch_driver = axs5106l::Axs5106l::new(
         i2c,
         touch_driver_reset_pin,
-        172,
-        320,
+        DISPLAY_SIZE_X,
+        DISPLAY_SIZE_Y,
         axs5106l::Rotation::Rotate0,
     );
     touch_driver
@@ -76,6 +87,33 @@ fn main() -> ! {
         delay.clone(),
     )
     .expect("could not create SPI bus device");
+
+    // Configure SPI interface for display
+    let buffer = SPI_BUFFER.init([0; 4096]);
+    let spi_interface = SpiInterface::new(
+        spi,
+        gpio::Output::new(
+            peripherals.GPIO15,
+            gpio::Level::High,
+            gpio::OutputConfig::default(),
+        ),
+        buffer,
+    );
+
+    // Configure display driver
+    let mut display = mipidsi::Builder::new(ST7789, spi_interface)
+        .invert_colors(ColorInversion::Normal)
+        .color_order(mipidsi::options::ColorOrder::Bgr)
+        .reset_pin(gpio::Output::new(
+            peripherals.GPIO22,
+            gpio::Level::High,
+            gpio::OutputConfig::default(),
+        ))
+        .display_offset(DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y)
+        .display_size(DISPLAY_SIZE_X, DISPLAY_SIZE_Y)
+        .orientation(Orientation::new().rotate(Rotation::Deg90).flip_horizontal())
+        .init(&mut delay)
+        .expect("Failed to init display");
 
     loop {}
 }
