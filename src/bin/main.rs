@@ -8,6 +8,7 @@
 
 use esp_hal::clock::CpuClock;
 use esp_hal::delay::Delay;
+use esp_hal::gpio;
 use esp_hal::i2c::master::I2c;
 use esp_hal::main;
 use esp_hal::time::Rate;
@@ -36,6 +37,23 @@ fn main() -> ! {
         .expect("could not create I2C instance")
         .with_sda(peripherals.GPIO18)
         .with_scl(peripherals.GPIO19);
+
+    // Configure touch driver
+    let touch_driver_reset_pin = gpio::Output::new(
+        peripherals.GPIO20,
+        gpio::Level::Low,
+        gpio::OutputConfig::default(),
+    );
+    let mut touch_driver = axs5106l::Axs5106l::new(
+        i2c,
+        touch_driver_reset_pin,
+        172,
+        320,
+        axs5106l::Rotation::Rotate0,
+    );
+    touch_driver
+        .init(&mut delay)
+        .expect("failed to initialize the touch driver");
 
     loop {}
 }
