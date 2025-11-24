@@ -6,6 +6,7 @@
     holding buffers for the duration of a data transfer."
 )]
 
+use embedded_graphics::{pixelcolor::Rgb565, prelude::*};
 use esp_hal::clock::CpuClock;
 use esp_hal::delay::Delay;
 use esp_hal::i2c::master::I2c;
@@ -28,10 +29,17 @@ fn panic(_: &core::panic::PanicInfo) -> ! {
 // For more information see: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/app_image_format.html#application-description>
 esp_bootloader_esp_idf::esp_app_desc!();
 
+//     ┌─────────────────────────┐
+//     │ +──────────────────── X │
+//    ┌┐ │                       │
+// ====│ │  Display Orientation  │
+//    └┘ │                       │
+//     │ Y                       │
+//     └─────────────────────────┘
 const DISPLAY_OFFSET_X: u16 = 34;
 const DISPLAY_OFFSET_Y: u16 = 0;
-const DISPLAY_SIZE_X: u16 = 172;
-const DISPLAY_SIZE_Y: u16 = 320;
+const DISPLAY_SIZE_H: u16 = 172; // Y-axis
+const DISPLAY_SIZE_W: u16 = 320; // X-axis
 
 static SPI_BUFFER: StaticCell<[u8; 4096]> = StaticCell::new();
 
@@ -59,9 +67,10 @@ fn main() -> ! {
     let mut touch_driver = axs5106l::Axs5106l::new(
         i2c,
         touch_driver_reset_pin,
-        DISPLAY_SIZE_X,
-        DISPLAY_SIZE_Y,
-        axs5106l::Rotation::Rotate0,
+        DISPLAY_SIZE_W,
+        DISPLAY_SIZE_H,
+        // Note: touch panel and LCD rotations are different.
+        axs5106l::Rotation::Rotate270,
     );
     touch_driver
         .init(&mut delay)
@@ -110,10 +119,22 @@ fn main() -> ! {
             gpio::OutputConfig::default(),
         ))
         .display_offset(DISPLAY_OFFSET_X, DISPLAY_OFFSET_Y)
-        .display_size(DISPLAY_SIZE_X, DISPLAY_SIZE_Y)
+        .display_size(DISPLAY_SIZE_H, DISPLAY_SIZE_W) // H/W swapped because of rotation
         .orientation(Orientation::new().rotate(Rotation::Deg90).flip_horizontal())
         .init(&mut delay)
         .expect("Failed to init display");
+
+    // Initialize display
+    display
+        .clear(Rgb565::WHITE)
+        .expect("Failed to clear display");
+
+    // Turn on display backlight
+    let _backlight = gpio::Output::new(
+        peripherals.GPIO23,
+        gpio::Level::High,
+        gpio::OutputConfig::default(),
+    );
 
     loop {}
 }
