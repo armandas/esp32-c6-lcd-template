@@ -14,14 +14,15 @@ use esp_hal::main;
 use esp_hal::spi::master::Spi;
 use esp_hal::time::Rate;
 use esp_hal::{gpio, spi};
-use log::info;
+use log::{info, error};
 use mipidsi::interface::SpiInterface;
 use mipidsi::models::ST7789;
 use mipidsi::options::{ColorInversion, Orientation, Rotation};
 use static_cell::StaticCell;
 
 #[panic_handler]
-fn panic(_: &core::panic::PanicInfo) -> ! {
+fn panic(panic_info: &core::panic::PanicInfo) -> ! {
+    error!("{panic_info}");
     loop {}
 }
 
