@@ -13,12 +13,17 @@ use embedded_graphics::{
 };
 use embedded_graphics::{pixelcolor::Rgb565, prelude::*};
 use embedded_graphics_framebuf::FrameBuf;
-use esp_hal::clock::CpuClock;
 use esp_hal::delay::Delay;
 use esp_hal::i2c::master::I2c;
 use esp_hal::main;
 use esp_hal::spi::master::Spi;
+use esp_hal::time::Instant;
 use esp_hal::time::Rate;
+use esp_hal::{
+    clock::CpuClock,
+    dma::{DmaRxBuf, DmaTxBuf},
+    dma_buffers,
+};
 use esp_hal::{gpio, spi};
 use log::{info, error};
 use mipidsi::interface::SpiInterface;
@@ -83,6 +88,11 @@ fn main() -> ! {
         .init(&mut delay)
         .expect("failed to initialize the touch driver");
 
+    // Configure DMA
+    let (rx_buffer, rx_descriptors, tx_buffer, tx_descriptors) = dma_buffers!(10 * 1024);
+    let dma_rx_buf = DmaRxBuf::new(rx_descriptors, rx_buffer).unwrap();
+    let dma_tx_buf = DmaTxBuf::new(tx_descriptors, tx_buffer).unwrap();
+
     // Configure SPI
     let spi = Spi::new(
         peripherals.SPI2,
@@ -92,7 +102,9 @@ fn main() -> ! {
     )
     .expect("could not create SPI instance")
     .with_sck(peripherals.GPIO1)
-    .with_mosi(peripherals.GPIO2);
+    .with_mosi(peripherals.GPIO2)
+    .with_dma(peripherals.DMA_CH0)
+    .with_buffers(dma_rx_buf, dma_tx_buf);
     let spi = embedded_hal_bus::spi::ExclusiveDevice::new(
         spi,
         gpio::Output::new(
@@ -163,9 +175,11 @@ fn main() -> ! {
             y += 1;
         }
 
+        let start = Instant::now();
         let area = Rectangle::new(Point::zero(), frame_buffer.size());
         display
             .fill_contiguous(&area, frame_buffer.data.iter().copied())
             .ok();
+        info!("{}", start.elapsed());
     }
 }
