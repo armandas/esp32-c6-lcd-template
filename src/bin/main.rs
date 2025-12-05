@@ -6,7 +6,12 @@
     holding buffers for the duration of a data transfer."
 )]
 
+use embedded_graphics::{
+    mono_font::{ascii::FONT_10X20, MonoTextStyle},
+    text::Text,
+};
 use embedded_graphics::{pixelcolor::Rgb565, prelude::*};
+
 use esp_hal::clock::CpuClock;
 use esp_hal::delay::Delay;
 use esp_hal::i2c::master::I2c;
@@ -137,5 +142,22 @@ fn main() -> ! {
         gpio::OutputConfig::default(),
     );
 
-    loop {}
+    let character_style = MonoTextStyle::new(&FONT_10X20, Rgb565::BLACK);
+    let mut text = Text::new("Hello, World!", Point::new(90, 0), character_style);
+    let mut y = 0;
+
+    loop {
+        display.clear(Rgb565::WHITE).ok();
+
+        text.position.y = y;
+        text.draw(&mut display).ok();
+
+        if y == DISPLAY_SIZE_H as i32 + 20 {
+            y = 0;
+        } else {
+            y += 1;
+        }
+
+        delay.delay_millis(10);
+    }
 }
