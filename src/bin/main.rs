@@ -8,10 +8,11 @@
 
 use embedded_graphics::{
     mono_font::{ascii::FONT_10X20, MonoTextStyle},
+    primitives::Rectangle,
     text::Text,
 };
 use embedded_graphics::{pixelcolor::Rgb565, prelude::*};
-
+use embedded_graphics_framebuf::FrameBuf;
 use esp_hal::clock::CpuClock;
 use esp_hal::delay::Delay;
 use esp_hal::i2c::master::I2c;
@@ -142,15 +143,19 @@ fn main() -> ! {
         gpio::OutputConfig::default(),
     );
 
+    let mut data = [Rgb565::BLACK; DISPLAY_SIZE_W as usize * DISPLAY_SIZE_H as usize];
+    let mut frame_buffer =
+        FrameBuf::new(&mut data, DISPLAY_SIZE_W as usize, DISPLAY_SIZE_H as usize);
+
     let character_style = MonoTextStyle::new(&FONT_10X20, Rgb565::BLACK);
     let mut text = Text::new("Hello, World!", Point::new(90, 0), character_style);
     let mut y = 0;
 
     loop {
-        display.clear(Rgb565::WHITE).ok();
+        frame_buffer.clear(Rgb565::WHITE).ok();
 
         text.position.y = y;
-        text.draw(&mut display).ok();
+        text.draw(&mut frame_buffer).ok();
 
         if y == DISPLAY_SIZE_H as i32 + 20 {
             y = 0;
@@ -158,6 +163,9 @@ fn main() -> ! {
             y += 1;
         }
 
-        delay.delay_millis(10);
+        let area = Rectangle::new(Point::zero(), frame_buffer.size());
+        display
+            .fill_contiguous(&area, frame_buffer.data.iter().copied())
+            .ok();
     }
 }
