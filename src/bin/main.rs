@@ -6,6 +6,9 @@
     holding buffers for the duration of a data transfer."
 )]
 
+extern crate alloc;
+use alloc::format;
+
 use embedded_graphics::{
     mono_font::{ascii::FONT_10X20, MonoTextStyle},
     primitives::Rectangle,
@@ -25,7 +28,7 @@ use esp_hal::{
     dma_buffers,
 };
 use esp_hal::{gpio, spi};
-use log::{info, error};
+use log::{error, info};
 use mipidsi::interface::SpiInterface;
 use mipidsi::models::ST7789;
 use mipidsi::options::{ColorInversion, Orientation, Rotation};
@@ -58,6 +61,7 @@ static SPI_BUFFER: StaticCell<[u8; 4096]> = StaticCell::new();
 #[main]
 fn main() -> ! {
     esp_println::logger::init_logger_from_env();
+    esp_alloc::heap_allocator!(size: 1024);
 
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
@@ -165,6 +169,13 @@ fn main() -> ! {
 
     loop {
         frame_buffer.clear(Rgb565::WHITE).ok();
+
+        let message = format!(
+            "Current timestamp: {} ms",
+            Instant::now().duration_since_epoch().as_millis()
+        );
+        let text2 = Text::new(&message, Point::new(30, 20 + y), character_style);
+        text2.draw(&mut frame_buffer).ok();
 
         text.position.y = y;
         text.draw(&mut frame_buffer).ok();
