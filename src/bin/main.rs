@@ -183,9 +183,10 @@ fn main() -> ! {
     }
 
     loop {
-        if let Ok(temperature) = imu.read_temperature() {
-            info!("Temperature: {temperature:#06X} {}", temperature as f32 / 256f32);
+        if let Ok(imu) = imu.read_imu_data() {
+            info!("{}", imu.accel_x);
         }
+        delay.delay_millis(100);
 
         frame_buffer.clear(Rgb565::WHITE).ok();
 
