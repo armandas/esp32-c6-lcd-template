@@ -9,6 +9,9 @@
 extern crate alloc;
 use alloc::format;
 
+use core::cell::RefCell;
+use embedded_hal_bus::i2c::RefCellDevice;
+
 use embedded_graphics::{
     mono_font::{ascii::FONT_10X20, MonoTextStyle},
     primitives::Rectangle,
@@ -33,6 +36,8 @@ use mipidsi::interface::SpiInterface;
 use mipidsi::models::ST7789;
 use mipidsi::options::{ColorInversion, Orientation, Rotation};
 use static_cell::StaticCell;
+
+use hello_display::qmi8658a::Qmi8658a;
 
 #[panic_handler]
 fn panic(panic_info: &core::panic::PanicInfo) -> ! {
@@ -73,6 +78,7 @@ fn main() -> ! {
         .expect("could not create I2C instance")
         .with_sda(peripherals.GPIO18)
         .with_scl(peripherals.GPIO19);
+    let i2c = RefCell::new(i2c);
 
     // Configure touch driver
     let touch_driver_reset_pin = gpio::Output::new(
@@ -81,7 +87,7 @@ fn main() -> ! {
         gpio::OutputConfig::default(),
     );
     let mut touch_driver = axs5106l::Axs5106l::new(
-        i2c,
+        RefCellDevice::new(&i2c),
         touch_driver_reset_pin,
         DISPLAY_SIZE_W,
         DISPLAY_SIZE_H,
@@ -91,6 +97,9 @@ fn main() -> ! {
     touch_driver
         .init(&mut delay)
         .expect("failed to initialize the touch driver");
+
+    // Configure IMU
+    let mut imu = Qmi8658a::new(RefCellDevice::new(&i2c), 0x6b);
 
     // Configure DMA
     let (rx_buffer, rx_descriptors, tx_buffer, tx_descriptors) = dma_buffers!(10 * 1024);
@@ -167,7 +176,17 @@ fn main() -> ! {
     let mut text = Text::new("Hello, World!", Point::new(90, 0), character_style);
     let mut y = 0;
 
+    imu.initialize().expect("failed to initialize IMU");
+    match imu.read_chip_id() {
+        Ok(id) => info!("IMU ID: {id}"),
+        Err(err) => error!("Error reading chip id: {err}"),
+    }
+
     loop {
+        if let Ok(temperature) = imu.read_temperature() {
+            info!("Temperature: {temperature:#06X} {}", temperature as f32 / 256f32);
+        }
+
         frame_buffer.clear(Rgb565::WHITE).ok();
 
         let message = format!(
@@ -186,11 +205,11 @@ fn main() -> ! {
             y += 1;
         }
 
-        let start = Instant::now();
+        // let start = Instant::now();
         let area = Rectangle::new(Point::zero(), frame_buffer.size());
         display
             .fill_contiguous(&area, frame_buffer.data.iter().copied())
             .ok();
-        info!("{}", start.elapsed());
+        // info!("{}", start.elapsed());
     }
 }
