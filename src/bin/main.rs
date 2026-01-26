@@ -37,7 +37,7 @@ use mipidsi::models::ST7789;
 use mipidsi::options::{ColorInversion, Orientation, Rotation};
 use static_cell::StaticCell;
 
-use hello_display::qmi8658a::Qmi8658a;
+use hello_display::qmi8658a::{self, Qmi8658a};
 
 #[panic_handler]
 fn panic(panic_info: &core::panic::PanicInfo) -> ! {
@@ -176,16 +176,38 @@ fn main() -> ! {
     let mut text = Text::new("Hello, World!", Point::new(90, 0), character_style);
     let mut y = 0;
 
-    imu.initialize().expect("failed to initialize IMU");
+    let imu_config = qmi8658a::Config::default()
+        .with_address_auto_increment()
+        .with_gyroscope_enabled()
+        .with_accelerometer_enabled()
+        .with_sync_sample_enabled();
+
+    imu.initialize(imu_config)
+        .expect("failed to initialize IMU");
     match imu.read_chip_id() {
         Ok(id) => info!("IMU ID: {id}"),
         Err(err) => error!("Error reading chip id: {err}"),
     }
 
+    let mut angle = 0f32;
+    let mut time_prev = esp_hal::time::Instant::now();
+
     loop {
-        if let Ok(imu) = imu.read_imu_data() {
-            info!("{}", imu.accel_x);
+        if let Ok(Some(data)) = imu.read_imu_data() {
+            // info!(
+            //     "Gyro: x={:+.4}, y={:+.4}, z={:+.4}",
+            //     16f32 * (data.gyro_x as f32) / (i16::MAX as f32),
+            //     16f32 * (data.gyro_y as f32) / (i16::MAX as f32),
+            //     16f32 * (data.gyro_z as f32) / (i16::MAX as f32)
+            // );
+            let delta_t = time_prev.elapsed();
+            time_prev = esp_hal::time::Instant::now();
+
+            angle += (16f32 * (data.gyro_z as f32) / (i16::MAX as f32))
+                * (delta_t.as_millis() as f32 / 1000f32);
+            info!("Angle: {angle}");
         }
+
         delay.delay_millis(100);
 
         frame_buffer.clear(Rgb565::WHITE).ok();
